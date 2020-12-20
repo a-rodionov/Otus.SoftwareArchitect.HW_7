@@ -1,0 +1,1 @@
+# Otus.SoftwareArchitect.HW_7
