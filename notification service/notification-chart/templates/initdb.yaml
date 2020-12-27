@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ .Release.Name }}"
+  labels:
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: "{{ .Release.Name }}"
+      labels:
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: post-install-job
+          image: {{ printf "%s/%s:%s" .Values.postgresql.image.registry .Values.postgresql.image.repository .Values.postgresql.image.tag }}
+          env:
+            - name: DATABASE_URI_JOB
+              valueFrom:
+                secretKeyRef:
+                  name: otus-sw-arch-notification-secret
+                  key: DATABASE_URI_JOB
+          command:
+            - sh
+            - "-c"
+            - |
+              psql $DATABASE_URI_JOB <<'EOF'
+                DROP TABLE IF EXISTS email;
+                CREATE TABLE email(
+                  userId bigint NOT NULL,
+                  email varchar NOT NULL,
+                  title varchar NOT NULL,
+                  message varchar NOT NULL
+                )
+                WITH (
+                  OIDS=FALSE
+                );
+              EOF
+  backoffLimit: 5

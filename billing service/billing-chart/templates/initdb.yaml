@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ .Release.Name }}"
+  labels:
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: "{{ .Release.Name }}"
+      labels:
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: post-install-job
+          image: {{ printf "%s/%s:%s" .Values.postgresql.image.registry .Values.postgresql.image.repository .Values.postgresql.image.tag }}
+          env:
+            - name: DATABASE_URI_JOB
+              valueFrom:
+                secretKeyRef:
+                  name: otus-sw-arch-billing-secret
+                  key: DATABASE_URI_JOB
+          command:
+            - sh
+            - "-c"
+            - |
+              psql $DATABASE_URI_JOB <<'EOF'
+                DROP TABLE IF EXISTS users;
+                CREATE TABLE users(
+                  id serial NOT NULL,
+                  username varchar NOT NULL,
+                  password varchar NOT NULL,
+                  firstName varchar NOT NULL,
+                  lastName varchar NOT NULL,
+                  email varchar NOT NULL,
+                  phone varchar NOT NULL,
+                  balance bigint NOT NULL DEFAULT 0,
+                  CONSTRAINT uq_user_username UNIQUE ( username ),
+                  CONSTRAINT uq_user_email UNIQUE ( email ),
+                  CONSTRAINT uq_user_phone UNIQUE ( phone )
+                )
+                WITH (
+                  OIDS=FALSE
+                );
+              EOF
+  backoffLimit: 5

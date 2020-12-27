@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ .Release.Name }}"
+  labels:
+    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: "{{ .Release.Name }}"
+      labels:
+        helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: post-install-job
+          image: {{ printf "%s/%s:%s" .Values.postgresql.image.registry .Values.postgresql.image.repository .Values.postgresql.image.tag }}
+          env:
+            - name: DATABASE_URI_JOB
+              valueFrom:
+                secretKeyRef:
+                  name: otus-sw-arch-order-secret
+                  key: DATABASE_URI_JOB
+          command:
+            - sh
+            - "-c"
+            - |
+              psql $DATABASE_URI_JOB <<'EOF'
+                DROP TABLE IF EXISTS orders;
+                CREATE TABLE orders(
+                  id serial NOT NULL,
+                  userId bigint NOT NULL,
+                  price bigint NOT NULL DEFAULT 0,
+                  status bigint NOT NULL DEFAULT 0
+                )
+                WITH (
+                  OIDS=FALSE
+                );
+                DROP TABLE IF EXISTS orders_versioning;
+                CREATE TABLE orders_versioning(
+                  userId bigint NOT NULL,
+                  version bigint NOT NULL DEFAULT 0,
+                  CONSTRAINT uq_orders_versioning_userId UNIQUE (userId)
+                )
+                WITH (
+                  OIDS=FALSE
+                );
+              EOF
+  backoffLimit: 5

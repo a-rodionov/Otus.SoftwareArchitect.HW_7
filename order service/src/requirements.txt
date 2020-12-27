@@ -1,0 +1,7 @@
+Flask==1.1.2
+Flask-SQLAlchemy
+Flask-API
+psycopg2
+flask-wtf==0.14.3
+wtforms==2.3.3
+requests
